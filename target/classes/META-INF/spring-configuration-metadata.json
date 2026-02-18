@@ -14,6 +14,12 @@
   ],
   "properties": [
     {
+      "name": "telescope.access-token",
+      "type": "java.lang.String",
+      "sourceType": "dev.springtelescope.TelescopeProperties",
+      "defaultValue": ""
+    },
+    {
       "name": "telescope.base-package",
       "type": "java.lang.String",
       "sourceType": "dev.springtelescope.TelescopeProperties",
@@ -30,6 +36,12 @@
       "type": "java.lang.Boolean",
       "sourceType": "dev.springtelescope.TelescopeProperties",
       "defaultValue": true
+    },
+    {
+      "name": "telescope.flush-interval-ms",
+      "type": "java.lang.Long",
+      "sourceType": "dev.springtelescope.TelescopeProperties",
+      "defaultValue": 2000
     },
     {
       "name": "telescope.ignored-prefixes",
@@ -53,6 +65,12 @@
       "type": "java.lang.Long",
       "sourceType": "dev.springtelescope.TelescopeProperties",
       "defaultValue": 3600000
+    },
+    {
+      "name": "telescope.storage",
+      "type": "java.lang.String",
+      "sourceType": "dev.springtelescope.TelescopeProperties",
+      "defaultValue": "memory"
     },
     {
       "name": "telescope.tenant-pattern",

@@ -30,6 +30,9 @@ public class TelescopeQueryInspector implements StatementInspector {
         if (trimmedSql.startsWith("select 1") || trimmedSql.startsWith("select version")) {
             return sql;
         }
+        if (trimmedSql.contains("telescope_entries")) {
+            return sql;
+        }
 
         try {
             Map<String, Object> content = new LinkedHashMap<>();

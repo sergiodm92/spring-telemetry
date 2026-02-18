@@ -7,26 +7,28 @@ import dev.springtelescope.context.TelescopeUserProvider;
 import dev.springtelescope.controller.TelescopeController;
 import dev.springtelescope.filter.DefaultTelescopeFilterProvider;
 import dev.springtelescope.filter.TelescopeFilterProvider;
+import dev.springtelescope.storage.InMemoryTelescopeStorage;
 import dev.springtelescope.storage.TelescopeStorage;
 import dev.springtelescope.watcher.*;
-import jakarta.annotation.PostConstruct;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.autoconfigure.orm.jpa.HibernatePropertiesCustomizer;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.web.servlet.config.annotation.ViewControllerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @AutoConfiguration
+@ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @ConditionalOnProperty(prefix = "telescope", name = "enabled", havingValue = "true", matchIfMissing = true)
 @EnableConfigurationProperties(TelescopeProperties.class)
-@EnableScheduling
 @Import(TelescopeController.class)
 public class TelescopeAutoConfiguration {
 
@@ -36,10 +38,20 @@ public class TelescopeAutoConfiguration {
         this.properties = properties;
     }
 
+    // --- Scheduling support (isolated to avoid global side effect) ---
+
+    @Configuration(proxyBeanMethods = false)
+    @EnableScheduling
+    @ConditionalOnProperty(prefix = "telescope", name = "enabled", havingValue = "true", matchIfMissing = true)
+    static class TelescopeSchedulingConfiguration {
+    }
+
+    // --- Core beans ---
+
     @Bean
     @ConditionalOnMissingBean
     public TelescopeStorage telescopeStorage() {
-        return new TelescopeStorage(properties.getMaxEntries());
+        return new InMemoryTelescopeStorage(properties.getMaxEntries());
     }
 
     @Bean
@@ -52,6 +64,14 @@ public class TelescopeAutoConfiguration {
     @ConditionalOnMissingBean
     public TelescopeFilterProvider telescopeFilterProvider(TelescopeStorage storage) {
         return new DefaultTelescopeFilterProvider(storage);
+    }
+
+    // --- Security filter ---
+
+    @Bean
+    @ConditionalOnProperty(prefix = "telescope", name = "access-token")
+    public TelescopeSecurityFilter telescopeSecurityFilter() {
+        return new TelescopeSecurityFilter(properties);
     }
 
     // --- Watchers ---
@@ -72,6 +92,13 @@ public class TelescopeAutoConfiguration {
     @ConditionalOnProperty(prefix = "telescope.watchers", name = "exceptions", havingValue = "true", matchIfMissing = true)
     public TelescopeExceptionRecorder telescopeExceptionRecorder(TelescopeStorage storage, TelescopeUserProvider userProvider) {
         return new TelescopeExceptionRecorder(storage, userProvider);
+    }
+
+    @Bean
+    @ConditionalOnProperty(prefix = "telescope.watchers", name = "exceptions", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnMissingBean(TelescopeExceptionHandler.class)
+    public TelescopeExceptionHandler telescopeExceptionHandler(TelescopeExceptionRecorder recorder) {
+        return new TelescopeExceptionHandler(recorder);
     }
 
     @Bean
@@ -128,21 +155,23 @@ public class TelescopeAutoConfiguration {
         };
     }
 
-    // --- Log appender and model listener initialization ---
+    // --- Hibernate model listener initialization (uses injected beans) ---
 
-    @PostConstruct
-    public void initStaticComponents() {
-        // Initialize TelescopeModelListener static storage
-        try {
-            Class.forName("org.hibernate.event.spi.PostInsertEventListener");
-            // Only configure if Hibernate is on the classpath
-            TelescopeStorage storage = telescopeStorage();
-            TelescopeUserProvider userProvider = telescopeUserProvider();
+    @Bean
+    @ConditionalOnProperty(prefix = "telescope.watchers", name = "models", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnClass(name = "org.hibernate.event.spi.PostInsertEventListener")
+    public TelescopeModelListenerInitializer telescopeModelListenerInitializer(
+            TelescopeStorage storage, TelescopeUserProvider userProvider) {
+        return new TelescopeModelListenerInitializer(storage, userProvider);
+    }
+
+    public static class TelescopeModelListenerInitializer {
+        public TelescopeModelListenerInitializer(TelescopeStorage storage, TelescopeUserProvider userProvider) {
             TelescopeModelListener.configure(storage, userProvider);
-        } catch (ClassNotFoundException ignored) {
-            // Hibernate not on classpath, skip
         }
     }
+
+    // --- Log appender initialization ---
 
     @Bean
     @ConditionalOnProperty(prefix = "telescope.watchers", name = "logs", havingValue = "true", matchIfMissing = true)

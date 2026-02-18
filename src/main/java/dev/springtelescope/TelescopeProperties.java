@@ -16,6 +16,9 @@ public class TelescopeProperties {
     private String basePackage = "";
     private Set<String> ignoredPrefixes = Set.of("/actuator", "/swagger", "/v3/api-docs");
     private String tenantPattern = "";
+    private String accessToken = "";
+    private String storage = "memory";
+    private long flushIntervalMs = 2000;
     private Watchers watchers = new Watchers();
 
     @Data

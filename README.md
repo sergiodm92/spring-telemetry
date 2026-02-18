@@ -5,7 +5,7 @@
   <img src="https://img.shields.io/badge/version-0.1.0-purple" alt="Version 0.1.0">
 </p>
 
-# Spring Telescope
+# Spring Telemetry
 
 A **zero-configuration**, real-time debugging and observability dashboard for Spring Boot 3 applications. Inspired by [Laravel Telescope](https://laravel.com/docs/telescope), it captures HTTP requests, SQL queries, exceptions, logs, cache operations, scheduled tasks, application events, mail, and Hibernate model changes — all stored **in-memory** with no database required.
 

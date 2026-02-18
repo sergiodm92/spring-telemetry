@@ -90,6 +90,27 @@
         .log-warn { border-left: 3px solid #f59e0b; }
         .log-error { border-left: 3px solid #ef4444; }
 
+        .group-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 7px;
+            border-radius: 9999px;
+            background: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+
+        .group-badge:hover {
+            background: rgba(139, 92, 246, 0.3);
+            color: #c4b5fd;
+        }
+
         .detail-panel {
             transition: transform 0.2s ease;
         }
@@ -425,6 +446,17 @@
                     <span x-text="autoRefresh ? 'Auto' : 'Manual'"></span>
                 </button>
 
+                <!-- Group toggle -->
+                <button x-show="currentView !== 'home'"
+                        @click="groupDuplicates = !groupDuplicates; expandedGroups = []"
+                        :class="groupDuplicates ? 'text-violet-400 bg-violet-500/10' : 'text-gray-500 bg-[#1a1f2e]'"
+                        class="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors">
+                    <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                    </svg>
+                    <span x-text="groupDuplicates ? 'Grouped' : 'Flat'"></span>
+                </button>
+
                 <!-- Enable/Disable -->
                 <button @click="toggleEnabled()"
                         :class="enabled ? 'text-green-400 bg-green-500/10' : 'text-red-400 bg-red-500/10'"
@@ -508,9 +540,10 @@
                     <template x-if="currentView === 'requests'">
                         <div>
                             <div class="card overflow-hidden">
-                                <template x-for="entry in entries" :key="entry.uuid">
+                                <template x-for="entry in getDisplayEntries()" :key="entry._dk || entry.uuid">
                                     <div @click="selectEntry(entry)"
                                          :class="{'bg-violet-500/5 border-l-2 border-l-violet-500': selectedEntry?.uuid === entry.uuid}"
+                                         :style="entry._child ? 'padding-left: 2.5rem; opacity: 0.6' : ''"
                                          class="entry-row flex items-center gap-3 px-4 py-3 cursor-pointer">
                                         <span class="badge" :class="'badge-' + (entry.content?.method || '').toLowerCase()"
                                               x-text="entry.content?.method"></span>
@@ -520,6 +553,7 @@
                                               x-text="entry.content?.status"></span>
                                         <span class="text-xs text-gray-600 font-mono" x-text="entry.content?.duration + 'ms'"></span>
                                         <span class="text-xs text-gray-600 w-16 text-right" x-text="formatTime(entry.createdAt)"></span>
+                                        <span x-show="entry._gc > 1" @click.stop="toggleGroup(entry._gk)" class="group-badge" x-text="'x' + entry._gc"></span>
                                     </div>
                                 </template>
                                 <p x-show="entries.length === 0" class="text-sm text-gray-600 text-center py-8">No requests recorded</p>
@@ -531,14 +565,16 @@
                     <template x-if="currentView === 'exceptions'">
                         <div>
                             <div class="card overflow-hidden">
-                                <template x-for="entry in entries" :key="entry.uuid">
+                                <template x-for="entry in getDisplayEntries()" :key="entry._dk || entry.uuid">
                                     <div @click="selectEntry(entry)"
                                          :class="{'bg-violet-500/5 border-l-2 border-l-violet-500': selectedEntry?.uuid === entry.uuid}"
+                                         :style="entry._child ? 'padding-left: 2.5rem; opacity: 0.6' : ''"
                                          class="entry-row px-4 py-3 cursor-pointer">
                                         <div class="flex items-center gap-3">
                                             <span class="text-red-400 text-xs font-mono" x-text="entry.content?.class?.split('.')?.pop()"></span>
                                             <span class="text-gray-300 text-sm truncate flex-1" x-text="entry.content?.message"></span>
                                             <span class="text-xs text-gray-600" x-text="formatTime(entry.createdAt)"></span>
+                                            <span x-show="entry._gc > 1" @click.stop="toggleGroup(entry._gk)" class="group-badge" x-text="'x' + entry._gc"></span>
                                         </div>
                                         <div class="flex items-center gap-2 mt-1">
                                             <span class="text-xs text-gray-600 font-mono" x-text="entry.content?.location"></span>
@@ -559,9 +595,10 @@
                     <template x-if="currentView === 'queries'">
                         <div>
                             <div class="card overflow-hidden">
-                                <template x-for="entry in entries" :key="entry.uuid">
+                                <template x-for="entry in getDisplayEntries()" :key="entry._dk || entry.uuid">
                                     <div @click="selectEntry(entry)"
                                          :class="{'bg-violet-500/5 border-l-2 border-l-violet-500': selectedEntry?.uuid === entry.uuid}"
+                                         :style="entry._child ? 'padding-left: 2.5rem; opacity: 0.6' : ''"
                                          class="entry-row px-4 py-3 cursor-pointer">
                                         <div class="flex items-center gap-3">
                                             <span class="badge text-xs"
@@ -575,6 +612,7 @@
                                                   x-text="entry.content?.type"></span>
                                             <span class="text-gray-300 truncate flex-1 font-mono text-xs" x-text="truncateSql(entry.content?.sql)"></span>
                                             <span class="text-xs text-gray-600" x-text="formatTime(entry.createdAt)"></span>
+                                            <span x-show="entry._gc > 1" @click.stop="toggleGroup(entry._gk)" class="group-badge" x-text="'x' + entry._gc"></span>
                                         </div>
                                     </div>
                                 </template>
@@ -587,9 +625,10 @@
                     <template x-if="currentView === 'logs'">
                         <div>
                             <div class="card overflow-hidden">
-                                <template x-for="entry in entries" :key="entry.uuid">
+                                <template x-for="entry in getDisplayEntries()" :key="entry._dk || entry.uuid">
                                     <div @click="selectEntry(entry)"
                                          :class="{'bg-violet-500/5': selectedEntry?.uuid === entry.uuid}"
+                                         :style="entry._child ? 'padding-left: 2.5rem; opacity: 0.6' : ''"
                                          class="entry-row px-4 py-3 cursor-pointer"
                                          :class="'log-' + (entry.content?.level || '').toLowerCase()">
                                         <div class="flex items-center gap-3">
@@ -603,6 +642,7 @@
                                             <span class="text-gray-300 text-sm truncate flex-1" x-text="entry.content?.message"></span>
                                             <span class="text-xs text-gray-600 font-mono" x-text="entry.content?.logger?.split('.')?.pop()"></span>
                                             <span class="text-xs text-gray-600" x-text="formatTime(entry.createdAt)"></span>
+                                            <span x-show="entry._gc > 1" @click.stop="toggleGroup(entry._gk)" class="group-badge" x-text="'x' + entry._gc"></span>
                                         </div>
                                     </div>
                                 </template>
@@ -615,9 +655,10 @@
                     <template x-if="currentView === 'schedule'">
                         <div>
                             <div class="card overflow-hidden">
-                                <template x-for="entry in entries" :key="entry.uuid">
+                                <template x-for="entry in getDisplayEntries()" :key="entry._dk || entry.uuid">
                                     <div @click="selectEntry(entry)"
                                          :class="{'bg-violet-500/5 border-l-2 border-l-violet-500': selectedEntry?.uuid === entry.uuid}"
+                                         :style="entry._child ? 'padding-left: 2.5rem; opacity: 0.6' : ''"
                                          class="entry-row flex items-center gap-3 px-4 py-3 cursor-pointer">
                                         <span class="badge text-xs"
                                               :class="entry.content?.status === 'completed' ? 'bg-green-500/15 text-green-400' : 'bg-red-500/15 text-red-400'"
@@ -626,6 +667,7 @@
                                         <span class="flex-1"></span>
                                         <span class="text-xs text-gray-600 font-mono" x-text="entry.content?.duration + 'ms'"></span>
                                         <span class="text-xs text-gray-600" x-text="formatTime(entry.createdAt)"></span>
+                                        <span x-show="entry._gc > 1" @click.stop="toggleGroup(entry._gk)" class="group-badge" x-text="'x' + entry._gc"></span>
                                     </div>
                                 </template>
                                 <p x-show="entries.length === 0" class="text-sm text-gray-600 text-center py-8">No scheduled tasks recorded</p>
@@ -637,9 +679,10 @@
                     <template x-if="currentView === 'cache'">
                         <div>
                             <div class="card overflow-hidden">
-                                <template x-for="entry in entries" :key="entry.uuid">
+                                <template x-for="entry in getDisplayEntries()" :key="entry._dk || entry.uuid">
                                     <div @click="selectEntry(entry)"
                                          :class="{'bg-violet-500/5 border-l-2 border-l-violet-500': selectedEntry?.uuid === entry.uuid}"
+                                         :style="entry._child ? 'padding-left: 2.5rem; opacity: 0.6' : ''"
                                          class="entry-row flex items-center gap-3 px-4 py-3 cursor-pointer">
                                         <span class="badge text-xs"
                                               :class="'badge-' + (entry.content?.operation || '').toLowerCase()"
@@ -648,6 +691,7 @@
                                         <span class="text-gray-500 text-xs truncate flex-1 font-mono" x-text="entry.content?.key"></span>
                                         <span class="text-xs text-gray-600 font-mono" x-text="entry.content?.duration + 'ms'"></span>
                                         <span class="text-xs text-gray-600 w-16 text-right" x-text="formatTime(entry.createdAt)"></span>
+                                        <span x-show="entry._gc > 1" @click.stop="toggleGroup(entry._gk)" class="group-badge" x-text="'x' + entry._gc"></span>
                                     </div>
                                 </template>
                                 <p x-show="entries.length === 0" class="text-sm text-gray-600 text-center py-8">No cache operations recorded</p>
@@ -659,13 +703,15 @@
                     <template x-if="currentView === 'events'">
                         <div>
                             <div class="card overflow-hidden">
-                                <template x-for="entry in entries" :key="entry.uuid">
+                                <template x-for="entry in getDisplayEntries()" :key="entry._dk || entry.uuid">
                                     <div @click="selectEntry(entry)"
                                          :class="{'bg-violet-500/5 border-l-2 border-l-violet-500': selectedEntry?.uuid === entry.uuid}"
+                                         :style="entry._child ? 'padding-left: 2.5rem; opacity: 0.6' : ''"
                                          class="entry-row flex items-center gap-3 px-4 py-3 cursor-pointer">
                                         <span class="text-orange-400 text-sm font-mono font-semibold" x-text="entry.content?.event"></span>
                                         <span class="text-gray-500 text-xs flex-1" x-text="entry.content?.source"></span>
                                         <span class="text-xs text-gray-600 w-16 text-right" x-text="formatTime(entry.createdAt)"></span>
+                                        <span x-show="entry._gc > 1" @click.stop="toggleGroup(entry._gk)" class="group-badge" x-text="'x' + entry._gc"></span>
                                     </div>
                                 </template>
                                 <p x-show="entries.length === 0" class="text-sm text-gray-600 text-center py-8">No events recorded</p>
@@ -677,14 +723,16 @@
                     <template x-if="currentView === 'mail'">
                         <div>
                             <div class="card overflow-hidden">
-                                <template x-for="entry in entries" :key="entry.uuid">
+                                <template x-for="entry in getDisplayEntries()" :key="entry._dk || entry.uuid">
                                     <div @click="selectEntry(entry)"
                                          :class="{'bg-violet-500/5 border-l-2 border-l-violet-500': selectedEntry?.uuid === entry.uuid}"
+                                         :style="entry._child ? 'padding-left: 2.5rem; opacity: 0.6' : ''"
                                          class="entry-row px-4 py-3 cursor-pointer">
                                         <div class="flex items-center gap-3">
                                             <span class="text-pink-400 text-sm truncate flex-1" x-text="entry.content?.subject || '(no subject)'"></span>
                                             <span class="text-xs text-gray-500 font-mono" x-text="entry.content?.to"></span>
                                             <span class="text-xs text-gray-600 w-16 text-right" x-text="formatTime(entry.createdAt)"></span>
+                                            <span x-show="entry._gc > 1" @click.stop="toggleGroup(entry._gk)" class="group-badge" x-text="'x' + entry._gc"></span>
                                         </div>
                                     </div>
                                 </template>
@@ -697,9 +745,10 @@
                     <template x-if="currentView === 'models'">
                         <div>
                             <div class="card overflow-hidden">
-                                <template x-for="entry in entries" :key="entry.uuid">
+                                <template x-for="entry in getDisplayEntries()" :key="entry._dk || entry.uuid">
                                     <div @click="selectEntry(entry)"
                                          :class="{'bg-violet-500/5 border-l-2 border-l-violet-500': selectedEntry?.uuid === entry.uuid}"
+                                         :style="entry._child ? 'padding-left: 2.5rem; opacity: 0.6' : ''"
                                          class="entry-row flex items-center gap-3 px-4 py-3 cursor-pointer">
                                         <span class="badge text-xs"
                                               :class="'badge-' + (entry.content?.action || '').toLowerCase()"
@@ -708,6 +757,7 @@
                                         <span class="text-gray-500 text-xs font-mono" x-text="'#' + entry.content?.entityId"></span>
                                         <span class="text-gray-600 text-xs truncate flex-1" x-text="(entry.content?.changedFields || []).join(', ')"></span>
                                         <span class="text-xs text-gray-600 w-16 text-right" x-text="formatTime(entry.createdAt)"></span>
+                                        <span x-show="entry._gc > 1" @click.stop="toggleGroup(entry._gk)" class="group-badge" x-text="'x' + entry._gc"></span>
                                     </div>
                                 </template>
                                 <p x-show="entries.length === 0" class="text-sm text-gray-600 text-center py-8">No model changes recorded</p>
@@ -1092,6 +1142,8 @@
                 ddUserSearch: '',
                 ddTenantSearch: '',
                 pruneResult: '',
+                groupDuplicates: true,
+                expandedGroups: [],
 
                 // Navigation
                 navItems: [
@@ -1137,6 +1189,7 @@
                     this.currentView = view;
                     this.currentPage = 0;
                     this.selectedEntry = null;
+                    this.expandedGroups = [];
                     this.searchQuery = '';
                     this.filterMethod = '';
                     this.filterStatusGroup = '';
@@ -1155,7 +1208,56 @@
                 onFilterChange() {
                     this.currentPage = 0;
                     this.selectedEntry = null;
+                    this.expandedGroups = [];
                     this.fetchEntries();
+                },
+
+                // Grouping
+                getGroupKey(entry) {
+                    const c = entry.content || {};
+                    switch (entry.type) {
+                        case 'QUERY': return 'QUERY:' + (c.sql || '');
+                        case 'REQUEST': return 'REQUEST:' + (c.method || '') + ':' + (c.uri || '') + ':' + (c.status || '');
+                        case 'EXCEPTION': return 'EXCEPTION:' + (c.class || '') + ':' + (c.message || '');
+                        case 'LOG': return 'LOG:' + (c.level || '') + ':' + (c.logger || '') + ':' + (c.message || '');
+                        case 'SCHEDULE': return 'SCHEDULE:' + (c.class || '') + ':' + (c.method || '');
+                        case 'CACHE': return 'CACHE:' + (c.operation || '') + ':' + (c.cacheName || '') + ':' + (c.key || '');
+                        case 'EVENT': return 'EVENT:' + (c.event || '') + ':' + (c.eventClass || '');
+                        case 'MAIL': return 'MAIL:' + (c.subject || '') + ':' + (c.to || '');
+                        case 'MODEL': return 'MODEL:' + (c.action || '') + ':' + (c.entityClass || '') + ':' + (c.entityId || '');
+                        default: return entry.uuid;
+                    }
+                },
+
+                getDisplayEntries() {
+                    if (!this.groupDuplicates || this.currentView === 'home') return this.entries;
+                    const groups = new Map();
+                    for (const entry of this.entries) {
+                        const key = this.getGroupKey(entry);
+                        if (!groups.has(key)) groups.set(key, []);
+                        groups.get(key).push(entry);
+                    }
+                    const result = [];
+                    for (const [key, items] of groups) {
+                        const leader = items[0];
+                        result.push(Object.assign({}, leader, { _gc: items.length, _gk: key, _dk: 'leader:' + leader.uuid }));
+                        if (items.length > 1 && this.isGroupExpanded(key)) {
+                            for (let i = 1; i < items.length; i++) {
+                                result.push(Object.assign({}, items[i], { _child: true, _gc: 0, _gk: key, _dk: 'child:' + items[i].uuid }));
+                            }
+                        }
+                    }
+                    return result;
+                },
+
+                toggleGroup(key) {
+                    const idx = this.expandedGroups.indexOf(key);
+                    if (idx === -1) this.expandedGroups.push(key);
+                    else this.expandedGroups.splice(idx, 1);
+                },
+
+                isGroupExpanded(key) {
+                    return this.expandedGroups.includes(key);
                 },
 
                 // Fetch

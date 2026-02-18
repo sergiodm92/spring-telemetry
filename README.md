@@ -5,9 +5,9 @@
   <img src="https://img.shields.io/badge/version-0.1.0-purple" alt="Version 0.1.0">
 </p>
 
-# Spring Telemetry
+# Spring Telescope
 
-A **zero-configuration**, real-time debugging and observability dashboard for Spring Boot 3 applications. Inspired by [Laravel Telescope](https://laravel.com/docs/telescope), it captures HTTP requests, SQL queries, exceptions, logs, cache operations, scheduled tasks, application events, mail, and Hibernate model changes — all stored **in-memory** with no database required.
+A **zero-configuration**, real-time debugging and observability dashboard for Spring Boot 3 applications. Inspired by [Laravel Telescope](https://laravel.com/docs/telescope), it captures HTTP requests, SQL queries, exceptions, logs, cache operations, scheduled tasks, application events, mail, and Hibernate model changes — with **in-memory** or **database** storage.
 
 Add one Maven dependency, start your app, and open `/telescope`.
 
@@ -20,15 +20,18 @@ Add one Maven dependency, start your app, and open `/telescope`.
 - [Features](#features)
 - [Installation](#installation)
 - [Configuration](#configuration)
+- [Storage](#storage)
+  - [In-Memory (default)](#in-memory-default)
+  - [Database (JPA)](#database-jpa)
+  - [Custom Storage](#custom-storage)
 - [Watchers](#watchers)
 - [Customization](#customization)
   - [Custom User Provider](#custom-user-provider)
   - [Custom Filter Provider](#custom-filter-provider)
-  - [Custom Storage](#custom-storage)
 - [REST API](#rest-api)
 - [Architecture](#architecture)
 - [Multi-Tenancy Support](#multi-tenancy-support)
-- [Security Considerations](#security-considerations)
+- [Security](#security)
 - [Troubleshooting](#troubleshooting)
 - [Requirements](#requirements)
 - [License](#license)
@@ -79,7 +82,27 @@ The dashboard is a single-page application built with Alpine.js and Tailwind CSS
 - **Mail** — outgoing `SimpleMailMessage` details (to, from, subject, body preview)
 - **Models** — Hibernate entity inserts, updates (with changed fields), and deletes
 
-All views support **pagination**, **full-text search**, **user filtering**, **tenant filtering**, and **related entry grouping** (batch IDs link all entries from the same HTTP request).
+### Duplicate Grouping
+
+All views support **automatic duplicate grouping**. Entries with identical signatures (e.g., the same SQL query executed multiple times, or the same endpoint called repeatedly) are collapsed into a single row with an **"xN" badge** showing the count. Click the badge to expand and see each individual entry.
+
+Grouping criteria by type:
+
+| Type | Grouped by |
+|------|------------|
+| QUERY | SQL statement |
+| REQUEST | method + URI + status |
+| EXCEPTION | class + message |
+| LOG | level + logger + message |
+| SCHEDULE | class + method |
+| CACHE | operation + cache name + key |
+| EVENT | event + event class |
+| MAIL | subject + recipient |
+| MODEL | action + entity class + entity ID |
+
+Toggle between **Grouped** and **Flat** mode using the button in the toolbar.
+
+All views also support **pagination**, **full-text search**, **user filtering**, **tenant filtering**, and **related entry grouping** (batch IDs link all entries from the same HTTP request).
 
 ---
 
@@ -89,11 +112,13 @@ All views support **pagination**, **full-text search**, **user filtering**, **te
 |---------|-------------|
 | **Zero configuration** | Works out of the box with sensible defaults |
 | **Auto-detection** | Watchers only activate when their dependencies are on the classpath |
-| **In-memory storage** | No database required — entries stored in concurrent data structures |
+| **Dual storage** | In-memory (default) or database (JPA) — switch with one property |
 | **Auto-pruning** | Old entries are automatically cleaned up (configurable) |
+| **Duplicate grouping** | Identical entries are collapsed with expandable count badges |
 | **Multi-tenancy** | Built-in support for tenant/organization context via URL pattern or custom provider |
 | **Extensible** | Replace user provider, filter provider, or storage with your own implementations |
 | **Batch correlation** | All entries from the same HTTP request are linked by a batch ID |
+| **Access token** | Protect the dashboard with a configurable token (query param or header) |
 | **Security-aware** | Masks `Authorization` and `Cookie` headers, body truncation |
 | **Non-intrusive** | All watchers catch and swallow their own exceptions — Telescope never breaks your app |
 | **Toggle at runtime** | Enable/disable recording via the dashboard or API without restart |
@@ -138,46 +163,49 @@ telescope:
   enabled: true
 
   # Your application's base package — used to filter logs and events
-  # If empty, the log watcher captures ALL application logs (INFO+)
-  # If set, only logs from this package (and sub-packages) are captured
   base-package: com.mycompany.myapp
 
-  # Maximum number of entries kept in memory PER TYPE
-  # (9 types x 1000 = up to 9000 entries total)
+  # Maximum entries kept in memory PER TYPE (only for in-memory storage)
   max-entries: 1000
 
   # Automatically prune entries older than N hours
   prune-hours: 24
 
-  # How often the pruner runs (in milliseconds)
+  # How often the pruner runs (ms)
   prune-interval-ms: 3600000
 
   # URL path where the dashboard is served
   base-path: /telescope
 
   # URL prefixes to exclude from request recording
-  # The telescope base-path is always excluded automatically
   ignored-prefixes:
     - /actuator
     - /swagger
     - /v3/api-docs
 
-  # Regex pattern to extract tenant/organization ID from the request URL
-  # The first capture group becomes the tenant ID
-  # Leave empty to disable URL-based tenant extraction
+  # Regex to extract tenant ID from the request URL (first capture group)
   tenant-pattern: "/organizations/(\\d+)"
+
+  # Access token to protect the dashboard (leave empty to disable)
+  access-token: ""
+
+  # Storage backend: "memory" (default) or "database"
+  storage: memory
+
+  # How often buffered entries are flushed to the database (ms, only for database storage)
+  flush-interval-ms: 2000
 
   # Enable/disable individual watchers
   watchers:
-    requests: true      # HTTP request/response recording
-    queries: true       # SQL statement interception (requires Hibernate)
-    exceptions: true    # Exception recording
-    logs: true          # Log appender (requires Logback)
-    schedules: true     # @Scheduled task tracking (requires AOP)
-    cache: true         # Cache operation tracking (requires AOP)
-    events: true        # Spring ApplicationEvent capturing
-    mail: true          # Mail sending tracking (requires AOP + spring-mail)
-    models: true        # Hibernate entity change tracking (requires Hibernate)
+    requests: true
+    queries: true
+    exceptions: true
+    logs: true
+    schedules: true
+    cache: true
+    events: true
+    mail: true
+    models: true
 ```
 
 ### Properties reference
@@ -186,12 +214,15 @@ telescope:
 |----------|------|---------|-------------|
 | `telescope.enabled` | `boolean` | `true` | Master switch for the entire library |
 | `telescope.base-package` | `String` | `""` | Base package for log/event filtering |
-| `telescope.max-entries` | `int` | `1000` | Max entries per type in memory |
+| `telescope.max-entries` | `int` | `1000` | Max entries per type (in-memory only) |
 | `telescope.prune-hours` | `int` | `24` | Auto-prune entries older than N hours |
 | `telescope.prune-interval-ms` | `long` | `3600000` | Pruner execution interval (ms) |
 | `telescope.base-path` | `String` | `/telescope` | Dashboard URL path |
 | `telescope.ignored-prefixes` | `Set<String>` | `/actuator, /swagger, /v3/api-docs` | URL prefixes to ignore |
 | `telescope.tenant-pattern` | `String` | `""` | Regex for tenant ID extraction from URL |
+| `telescope.access-token` | `String` | `""` | Token to protect the dashboard |
+| `telescope.storage` | `String` | `memory` | Storage backend: `memory` or `database` |
+| `telescope.flush-interval-ms` | `long` | `2000` | DB flush interval (database storage only) |
 | `telescope.watchers.requests` | `boolean` | `true` | Enable request watcher |
 | `telescope.watchers.queries` | `boolean` | `true` | Enable query watcher |
 | `telescope.watchers.exceptions` | `boolean` | `true` | Enable exception watcher |
@@ -201,6 +232,93 @@ telescope:
 | `telescope.watchers.events` | `boolean` | `true` | Enable event watcher |
 | `telescope.watchers.mail` | `boolean` | `true` | Enable mail watcher |
 | `telescope.watchers.models` | `boolean` | `true` | Enable model watcher |
+
+---
+
+## Storage
+
+### In-Memory (default)
+
+The default storage keeps entries in concurrent data structures in memory. No database or additional configuration is required. Entries are lost on application restart.
+
+```yaml
+telescope:
+  storage: memory       # default
+  max-entries: 1000     # per type (9 types x 1000 = up to 9000 entries)
+```
+
+Best for: development, debugging, lightweight production monitoring where persistence is not needed.
+
+### Database (JPA)
+
+For persistent storage, Telescope can write entries to your application's database using JPA. Entries survive application restarts and can be queried across sessions.
+
+**Prerequisites:** `spring-boot-starter-data-jpa` must be on the classpath with a configured datasource.
+
+**1. Enable database storage:**
+
+```yaml
+telescope:
+  storage: database
+```
+
+**2. Configure your datasource** (if not already done):
+
+```yaml
+# application.yml
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/mydb
+    username: myuser
+    password: mypassword
+  jpa:
+    hibernate:
+      ddl-auto: update    # creates the telescope_entries table automatically
+```
+
+That's it. Telescope will automatically:
+
+- Create a `telescope_entries` table with indexed columns (`type`, `createdAt`, `batchId`, `userIdentifier`, `tenantId`)
+- Buffer entries in memory and flush them to the database every 2 seconds (configurable via `telescope.flush-interval-ms`)
+- Query the database for all dashboard operations (pagination, filtering, search)
+
+**Table schema (`telescope_entries`):**
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `uuid` | `VARCHAR(36)` PK | Entry unique identifier |
+| `type` | `VARCHAR(20)` | Entry type (REQUEST, QUERY, etc.) |
+| `created_at` | `TIMESTAMP` | When the entry was recorded |
+| `batch_id` | `VARCHAR(36)` | Batch correlation ID |
+| `content_json` | `TEXT` | Entry content as JSON |
+| `user_identifier` | `VARCHAR(255)` | User who triggered the entry |
+| `tenant_id` | `VARCHAR(255)` | Tenant/organization ID |
+| `tags_json` | `VARCHAR(2000)` | Tags as JSON array |
+
+**Supported databases:** Any database supported by Hibernate — PostgreSQL, MySQL, MariaDB, H2, Oracle, SQL Server, etc.
+
+**Tuning the flush interval:**
+
+```yaml
+telescope:
+  storage: database
+  flush-interval-ms: 5000   # flush every 5 seconds (reduces DB writes)
+```
+
+A shorter interval means entries appear in the dashboard faster. A longer interval reduces database write pressure. The flusher also runs on application shutdown (`@PreDestroy`) to avoid losing buffered entries.
+
+### Custom Storage
+
+You can replace either built-in storage by providing your own `TelescopeStorage` bean:
+
+```java
+@Bean
+public TelescopeStorage telescopeStorage() {
+    return new MyRedisTelescopeStorage();
+}
+```
+
+The `@ConditionalOnMissingBean` on the default storage beans ensures your implementation takes precedence automatically.
 
 ---
 
@@ -240,7 +358,9 @@ Health-check queries (`SELECT 1`, `SELECT VERSION`) are automatically excluded.
 
 **Requires:** Core (no additional dependencies)
 
-Provides a `TelescopeExceptionRecorder` bean that you can inject into your `@ControllerAdvice` or exception handlers:
+A built-in `@ControllerAdvice` (`TelescopeExceptionHandler`) captures unhandled exceptions automatically. It runs with lowest precedence so your application-defined handlers take priority.
+
+You can also inject `TelescopeExceptionRecorder` to record exceptions manually:
 
 ```java
 @ControllerAdvice
@@ -298,7 +418,7 @@ Intercepts `@Cacheable`, `@CacheEvict`, and `@CachePut` annotations:
 - Cache operation type (HIT, MISS, EVICT, PUT)
 - Cache name
 - Cache key (derived from method signature and arguments)
-- Duration (used for hit/miss heuristic: < 2ms = HIT)
+- Duration (used for hit/miss heuristic: < 500 microseconds = HIT)
 
 ### Event Watcher
 
@@ -317,10 +437,11 @@ Listens for all Spring `ApplicationEvent` instances. Captures:
 
 **Requires:** `spring-boot-starter-aop` + `spring-boot-starter-mail`
 
-Intercepts `MailSender.send()` calls and captures:
+Intercepts `MailSender.send()` and `JavaMailSender.send()` calls and captures:
 
 - To, From, Subject
 - Body preview (truncated at 500 characters)
+- Message type (simple / mime)
 - Tags
 
 ### Model Watcher
@@ -341,7 +462,7 @@ Captures: entity class, entity ID, action, changed fields.
 
 ### Custom User Provider
 
-By default, Telescope uses Spring Security's `SecurityContextHolder` to identify the current user. If Spring Security is not on the classpath, user identification is disabled.
+By default, Telescope uses Spring Security's `SecurityContextHolder` (via reflection) to identify the current user. If Spring Security is not on the classpath, user identification is disabled.
 
 To customize how users are identified, implement `TelescopeUserProvider` and register it as a Spring bean:
 
@@ -357,14 +478,12 @@ public class MyTelescopeUserProvider implements TelescopeUserProvider {
 
     @Override
     public String getCurrentUserIdentifier() {
-        // Return email, username, user ID, or any string identifier
         MyUser user = authService.getCurrentUser();
         return user != null ? user.getEmail() : null;
     }
 
     @Override
     public String getCurrentTenantId() {
-        // Return tenant/organization ID if applicable
         MyUser user = authService.getCurrentUser();
         return user != null ? String.valueOf(user.getOrganizationId()) : null;
     }
@@ -375,7 +494,7 @@ The `@ConditionalOnMissingBean` on the default provider ensures your implementat
 
 ### Custom Filter Provider
 
-The dashboard has dropdown filters for users and tenants. By default, these are populated from distinct values found in the in-memory storage. To show richer data (e.g., full names from your database), implement `TelescopeFilterProvider`:
+The dashboard has dropdown filters for users and tenants. By default, these are populated from distinct values found in the storage. To show richer data (e.g., full names from your database), implement `TelescopeFilterProvider`:
 
 ```java
 @Component
@@ -408,17 +527,6 @@ public class MyTelescopeFilterProvider implements TelescopeFilterProvider {
 ```
 
 Each map **must** contain `"id"` and `"name"` keys. The `"id"` is used for filtering, and `"name"` is displayed in the dropdown.
-
-### Custom Storage
-
-You can replace the default in-memory storage by providing your own `TelescopeStorage` bean:
-
-```java
-@Bean
-public TelescopeStorage telescopeStorage() {
-    return new MyCustomTelescopeStorage();
-}
-```
 
 ---
 
@@ -488,43 +596,52 @@ curl -X POST http://localhost:8080/telescope/api/prune?hours=12
 
 ```
 spring-telescope/
-├── TelescopeAutoConfiguration.java    # Spring Boot auto-configuration entry point
-├── TelescopeProperties.java           # @ConfigurationProperties for all settings
-├── TelescopeApiResponse.java          # Standard API response wrapper
+├── TelescopeAutoConfiguration.java       # Spring Boot auto-configuration entry point
+├── TelescopeProperties.java              # @ConfigurationProperties for all settings
+├── TelescopeApiResponse.java             # Standard API response wrapper
 ├── context/
-│   ├── TelescopeUserProvider.java     # Interface: who is the current user?
-│   ├── DefaultTelescopeUserProvider   # Default: uses Spring Security
-│   └── TelescopeBatchContext.java     # ThreadLocal batch ID for request correlation
+│   ├── TelescopeUserProvider.java        # Interface: who is the current user?
+│   ├── DefaultTelescopeUserProvider.java # Default: uses Spring Security via reflection
+│   └── TelescopeBatchContext.java        # ThreadLocal batch ID for request correlation
 ├── controller/
-│   └── TelescopeController.java       # REST API endpoints
+│   └── TelescopeController.java          # REST API endpoints
 ├── filter/
-│   ├── TelescopeFilterProvider.java   # Interface: dropdown filter data
-│   └── DefaultTelescopeFilterProvider # Default: extracts from storage
+│   ├── TelescopeFilterProvider.java      # Interface: dropdown filter data
+│   └── DefaultTelescopeFilterProvider.java # Default: extracts from storage
 ├── model/
-│   ├── TelescopeEntry.java            # Entry data model
-│   └── TelescopeEntryType.java        # Enum: REQUEST, QUERY, LOG, etc.
+│   ├── TelescopeEntry.java               # Entry data model
+│   └── TelescopeEntryType.java           # Enum: REQUEST, QUERY, LOG, etc.
 ├── storage/
-│   └── TelescopeStorage.java          # In-memory concurrent storage
+│   ├── TelescopeStorage.java             # Interface: storage abstraction
+│   ├── InMemoryTelescopeStorage.java     # Default: concurrent in-memory storage
+│   └── jpa/
+│       ├── TelescopeJpaAutoConfiguration.java # Auto-config for database storage
+│       ├── JpaTelescopeStorage.java      # JPA storage implementation with buffering
+│       ├── TelescopeEntryEntity.java     # JPA entity (telescope_entries table)
+│       ├── TelescopeEntryRepository.java # Spring Data JPA repository
+│       └── TelescopeStorageFlusher.java  # Periodic buffer → database flusher
 └── watcher/
-    ├── TelescopeRequestFilter.java        # HTTP request/response capture
+    ├── TelescopeRequestFilter.java       # HTTP request/response capture
     ├── TelescopeContextCaptureFilter.java # Captures user context from SecurityContext
-    ├── TelescopeQueryInspector.java       # Hibernate SQL statement inspector
-    ├── TelescopeExceptionRecorder.java    # Exception recording service
-    ├── TelescopeLogAppender.java          # Logback appender
-    ├── TelescopeScheduleAspect.java       # @Scheduled AOP aspect
-    ├── TelescopeCacheAspect.java          # @Cacheable/@CacheEvict AOP aspect
-    ├── TelescopeEventWatcher.java         # Spring ApplicationEvent listener
-    ├── TelescopeMailWatcher.java          # MailSender AOP aspect
-    ├── TelescopeModelListener.java        # Hibernate entity change listener
-    ├── TelescopeHibernateIntegrator.java   # Hibernate SPI integrator
-    └── TelescopePruner.java               # Scheduled entry cleanup
+    ├── TelescopeSecurityFilter.java      # Access token protection
+    ├── TelescopeQueryInspector.java      # Hibernate SQL statement inspector
+    ├── TelescopeExceptionHandler.java    # @ControllerAdvice for unhandled exceptions
+    ├── TelescopeExceptionRecorder.java   # Exception recording service
+    ├── TelescopeLogAppender.java         # Logback appender
+    ├── TelescopeScheduleAspect.java      # @Scheduled AOP aspect
+    ├── TelescopeCacheAspect.java         # @Cacheable/@CacheEvict AOP aspect
+    ├── TelescopeEventWatcher.java        # Spring ApplicationEvent listener
+    ├── TelescopeMailWatcher.java         # MailSender AOP aspect
+    ├── TelescopeModelListener.java       # Hibernate entity change listener
+    ├── TelescopeHibernateIntegrator.java # Hibernate SPI integrator
+    └── TelescopePruner.java              # Scheduled entry cleanup
 ```
 
 ### How auto-configuration works
 
-1. Spring Boot discovers `TelescopeAutoConfiguration` via `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
-2. The `@ConditionalOnProperty` check ensures the whole library is disabled if `telescope.enabled=false`
-3. Core beans (`TelescopeStorage`, `TelescopeUserProvider`, `TelescopeFilterProvider`) are created with `@ConditionalOnMissingBean` — your custom beans always take precedence
+1. Spring Boot discovers `TelescopeJpaAutoConfiguration` and `TelescopeAutoConfiguration` via `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`
+2. If `telescope.storage=database` and JPA is on the classpath, `TelescopeJpaAutoConfiguration` creates the JPA storage bean **before** the main auto-configuration (via `@AutoConfigureBefore`)
+3. `TelescopeAutoConfiguration` checks `@ConditionalOnProperty(telescope.enabled)` and creates core beans with `@ConditionalOnMissingBean` — your custom beans (or the JPA beans) always take precedence
 4. Each watcher bean has its own conditions:
    - `@ConditionalOnProperty` for the watcher toggle
    - `@ConditionalOnClass` for classpath dependencies (AOP, Hibernate, Mail, Logback)
@@ -534,6 +651,7 @@ spring-telescope/
 
 ```
 HTTP Request arrives
+  → TelescopeSecurityFilter checks access token (if configured)
   → TelescopeRequestFilter creates batch ID (ThreadLocal)
   → TelescopeContextCaptureFilter captures user from SecurityContext
   → Request proceeds through your app
@@ -546,6 +664,10 @@ HTTP Request arrives
   → Response completes
   → TelescopeRequestFilter records the full request/response
   → All entries share the same batch ID → viewable as "Related Entries"
+
+Storage:
+  → In-memory: entries stored directly in concurrent data structures
+  → Database: entries buffered in queue → flushed to DB every N ms
 ```
 
 ---
@@ -587,9 +709,24 @@ The tenant ID is stored on every entry and can be used to filter the dashboard.
 
 ---
 
-## Security Considerations
+## Security
 
-**Telescope is a development/debugging tool.** In production, you should secure the dashboard:
+**Telescope is a development/debugging tool.** In production, you should secure the dashboard.
+
+### Access token (built-in)
+
+The simplest way to protect the dashboard — no Spring Security required:
+
+```yaml
+telescope:
+  access-token: my-secret-token
+```
+
+Access the dashboard via:
+- Query parameter: `http://localhost:8080/telescope?token=my-secret-token`
+- Header: `X-Telescope-Token: my-secret-token`
+
+Requests without a valid token receive a `403 Forbidden` response.
 
 ### Restrict access with Spring Security
 
@@ -618,7 +755,7 @@ telescope:
   enabled: false
 ```
 
-### Sensitive data
+### Sensitive data handling
 
 - `Authorization` and `Cookie` headers are automatically masked with `***`
 - Request/response bodies are truncated at 10KB
@@ -656,6 +793,14 @@ telescope:
 1. Set `telescope.base-package` to your application's package
 2. Only events from classes within that package are captured
 3. Spring internal events are automatically excluded
+
+### Database storage: entries not appearing
+
+1. Verify `telescope.storage=database` is set
+2. Check your datasource configuration and that the DB is reachable
+3. Entries are buffered and flushed every `telescope.flush-interval-ms` (default 2s) — wait a moment
+4. Check logs for JPA/Hibernate errors
+5. Ensure `spring.jpa.hibernate.ddl-auto=update` (or create the table manually)
 
 ### The dashboard path conflicts with my app
 

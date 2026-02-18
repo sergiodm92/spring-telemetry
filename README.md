@@ -815,10 +815,37 @@ telescope:
 
 ## Requirements
 
-- **Java:** 17 or higher
+- **Java:** 17 or higher (17, 21, and future LTS versions)
 - **Spring Boot:** 3.x (tested with 3.2.x)
 - **Required:** `spring-boot-starter-web`
 - **Optional:** `spring-boot-starter-aop`, `spring-boot-starter-data-jpa`, `spring-boot-starter-mail`, `spring-boot-starter-security`, `logback-classic`
+
+### Java Version Compatibility
+
+Spring Telescope is compiled with **Java 17** as the minimum baseline. Thanks to Java's backward compatibility, it runs without issues on any higher version:
+
+| Java Version | Status | Notes |
+|--------------|--------|-------|
+| **17** (LTS) | Supported | Minimum required version |
+| **21** (LTS) | Supported | Fully compatible, including virtual threads |
+| **22+** | Supported | Any version >= 17 works |
+
+**Using Java 21?** No additional configuration is needed. Simply add the dependency to your project and it will work out of the box. Spring Boot 3.2+ officially supports Java 21, so the full stack (your app + Telescope) is fully compatible.
+
+```xml
+<!-- Your project's pom.xml — just set Java 21 and add the dependency -->
+<properties>
+    <java.version>21</java.version>
+</properties>
+
+<dependencies>
+    <dependency>
+        <groupId>dev.springtelescope</groupId>
+        <artifactId>spring-telescope</artifactId>
+        <version>0.1.0</version>
+    </dependency>
+</dependencies>
+```
 
 ---
 

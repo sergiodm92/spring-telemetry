@@ -1,0 +1,119 @@
+{
+  "groups": [
+    {
+      "name": "telescope",
+      "type": "dev.springtelescope.TelescopeProperties",
+      "sourceType": "dev.springtelescope.TelescopeProperties"
+    },
+    {
+      "name": "telescope.watchers",
+      "type": "dev.springtelescope.TelescopeProperties$Watchers",
+      "sourceType": "dev.springtelescope.TelescopeProperties",
+      "sourceMethod": "getWatchers()"
+    }
+  ],
+  "properties": [
+    {
+      "name": "telescope.base-package",
+      "type": "java.lang.String",
+      "sourceType": "dev.springtelescope.TelescopeProperties",
+      "defaultValue": ""
+    },
+    {
+      "name": "telescope.base-path",
+      "type": "java.lang.String",
+      "sourceType": "dev.springtelescope.TelescopeProperties",
+      "defaultValue": "\/telescope"
+    },
+    {
+      "name": "telescope.enabled",
+      "type": "java.lang.Boolean",
+      "sourceType": "dev.springtelescope.TelescopeProperties",
+      "defaultValue": true
+    },
+    {
+      "name": "telescope.ignored-prefixes",
+      "type": "java.util.Set<java.lang.String>",
+      "sourceType": "dev.springtelescope.TelescopeProperties"
+    },
+    {
+      "name": "telescope.max-entries",
+      "type": "java.lang.Integer",
+      "sourceType": "dev.springtelescope.TelescopeProperties",
+      "defaultValue": 1000
+    },
+    {
+      "name": "telescope.prune-hours",
+      "type": "java.lang.Integer",
+      "sourceType": "dev.springtelescope.TelescopeProperties",
+      "defaultValue": 24
+    },
+    {
+      "name": "telescope.prune-interval-ms",
+      "type": "java.lang.Long",
+      "sourceType": "dev.springtelescope.TelescopeProperties",
+      "defaultValue": 3600000
+    },
+    {
+      "name": "telescope.tenant-pattern",
+      "type": "java.lang.String",
+      "sourceType": "dev.springtelescope.TelescopeProperties",
+      "defaultValue": ""
+    },
+    {
+      "name": "telescope.watchers.cache",
+      "type": "java.lang.Boolean",
+      "sourceType": "dev.springtelescope.TelescopeProperties$Watchers",
+      "defaultValue": true
+    },
+    {
+      "name": "telescope.watchers.events",
+      "type": "java.lang.Boolean",
+      "sourceType": "dev.springtelescope.TelescopeProperties$Watchers",
+      "defaultValue": true
+    },
+    {
+      "name": "telescope.watchers.exceptions",
+      "type": "java.lang.Boolean",
+      "sourceType": "dev.springtelescope.TelescopeProperties$Watchers",
+      "defaultValue": true
+    },
+    {
+      "name": "telescope.watchers.logs",
+      "type": "java.lang.Boolean",
+      "sourceType": "dev.springtelescope.TelescopeProperties$Watchers",
+      "defaultValue": true
+    },
+    {
+      "name": "telescope.watchers.mail",
+      "type": "java.lang.Boolean",
+      "sourceType": "dev.springtelescope.TelescopeProperties$Watchers",
+      "defaultValue": true
+    },
+    {
+      "name": "telescope.watchers.models",
+      "type": "java.lang.Boolean",
+      "sourceType": "dev.springtelescope.TelescopeProperties$Watchers",
+      "defaultValue": true
+    },
+    {
+      "name": "telescope.watchers.queries",
+      "type": "java.lang.Boolean",
+      "sourceType": "dev.springtelescope.TelescopeProperties$Watchers",
+      "defaultValue": true
+    },
+    {
+      "name": "telescope.watchers.requests",
+      "type": "java.lang.Boolean",
+      "sourceType": "dev.springtelescope.TelescopeProperties$Watchers",
+      "defaultValue": true
+    },
+    {
+      "name": "telescope.watchers.schedules",
+      "type": "java.lang.Boolean",
+      "sourceType": "dev.springtelescope.TelescopeProperties$Watchers",
+      "defaultValue": true
+    }
+  ],
+  "hints": []
+}

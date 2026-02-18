@@ -30,15 +30,18 @@ public class TelescopeCacheAspect {
     public Object aroundCacheable(ProceedingJoinPoint joinPoint, Cacheable cacheable) throws Throwable {
         if (!storage.isEnabled()) return joinPoint.proceed();
 
-        long start = System.currentTimeMillis();
+        long startNanos = System.nanoTime();
         Object result = joinPoint.proceed();
-        long duration = System.currentTimeMillis() - start;
+        long durationNanos = System.nanoTime() - startNanos;
+        long durationMs = durationNanos / 1_000_000;
 
-        String operation = duration < 2 ? "HIT" : "MISS";
+        // A cache HIT typically returns in microseconds (< 1ms) since
+        // the method body is never executed. MISS executes the method body.
+        String operation = durationNanos < 500_000 ? "HIT" : "MISS";
         String cacheName = cacheable.value().length > 0 ? cacheable.value()[0] :
                            cacheable.cacheNames().length > 0 ? cacheable.cacheNames()[0] : "default";
 
-        recordCacheEntry(operation, cacheName, buildKey(joinPoint), duration);
+        recordCacheEntry(operation, cacheName, buildKey(joinPoint), durationMs);
         return result;
     }
 

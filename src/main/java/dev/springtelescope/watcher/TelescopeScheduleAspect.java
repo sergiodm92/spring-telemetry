@@ -28,6 +28,12 @@ public class TelescopeScheduleAspect {
             return joinPoint.proceed();
         }
 
+        // Skip telescope's own scheduled tasks to avoid circular recording
+        String targetClass = joinPoint.getTarget().getClass().getName();
+        if (targetClass.startsWith("dev.springtelescope")) {
+            return joinPoint.proceed();
+        }
+
         String batchId = UUID.randomUUID().toString();
         TelescopeBatchContext.set(batchId);
 

@@ -21,6 +21,10 @@ public class TelescopeModelListener implements PostInsertEventListener, PostUpda
         TelescopeModelListener.userProvider = userProvider;
     }
 
+    public static boolean isConfigured() {
+        return storage != null;
+    }
+
     @Override
     public void onPostInsert(PostInsertEvent event) {
         record("CREATED", event.getEntity(), event.getId(), event.getPersister(), null);
